@@ -342,7 +342,7 @@ scheduler(void)
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
-      p->quanta = 5;
+      p->quanta = INTERV;
 
       swtch(&(c->scheduler), p->context);
       switchkvm();
@@ -391,7 +391,7 @@ yield(void)
 
     --p->quanta;
 
-    /* cprintf("\n----Quantum %d: %s----\n", p->quanta, p->name); */
+    cprintf("\n----Quantum %d: %s----\n", p->quanta, p->name);
 
     if(!p->quanta ) {
         p->state = RUNNABLE;
