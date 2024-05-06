@@ -342,6 +342,7 @@ scheduler(void)
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
+      p->quanta = 5;
 
       swtch(&(c->scheduler), p->context);
       switchkvm();
@@ -385,10 +386,18 @@ sched(void)
 void
 yield(void)
 {
-  acquire(&ptable.lock);  //DOC: yieldlock
-  myproc()->state = RUNNABLE;
-  sched();
-  release(&ptable.lock);
+    acquire(&ptable.lock); 
+    struct proc *p = myproc();
+
+    --p->quanta;
+
+    /* cprintf("\n----Quantum %d: %s----\n", p->quanta, p->name); */
+
+    if(!p->quanta ) {
+        p->state = RUNNABLE;
+        sched();
+    }
+    release(&ptable.lock);
 }
 
 // A fork child's very first scheduling by scheduler()
