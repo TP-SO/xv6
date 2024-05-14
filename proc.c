@@ -15,6 +15,10 @@ struct {
 static struct proc *initproc;
 
 int nextpid = 1;
+uint exists1 = 0;
+uint exists2 = 0;
+uint exists3 = 0;
+uint exists4 = 0;
 extern void forkret(void);
 extern void trapret(void);
 
@@ -78,9 +82,11 @@ allocproc(void)
 
   acquire(&ptable.lock);
 
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    /* cprintf("\nAlloc: %s - %d\n", p->name, p->prio); */
     if(p->state == UNUSED)
       goto found;
+  }
 
   release(&ptable.lock);
   return 0;
@@ -88,6 +94,8 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  p->prio = 2;
+  exists2++;
 
   release(&ptable.lock);
 
@@ -391,7 +399,7 @@ yield(void)
 
     --p->quanta;
 
-    cprintf("\n----Quantum %d: %s----\n", p->quanta, p->name);
+    /* cprintf("\n----Quantum %d: %s----\n", p->quanta, p->name); */
 
     if(!p->quanta ) {
         p->state = RUNNABLE;
@@ -540,4 +548,41 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+int
+cps()
+{
+struct proc *p;
+//Enables interrupts on this processor.
+sti();
+
+//Loop over process table looking for process with pid.
+acquire(&ptable.lock);
+cprintf("name \t pid \t state \t priority \n");
+for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+  if(p->state == SLEEPING)
+	  cprintf("%s \t %d \t SLEEPING \t %d \n ", p->name,p->pid,p->prio);
+	else if(p->state == RUNNING)
+ 	  cprintf("%s \t %d \t RUNNING \t %d \n ", p->name,p->pid,p->prio);
+	else if(p->state == RUNNABLE)
+ 	  cprintf("%s \t %d \t RUNNABLE \t %d \n ", p->name,p->pid,p->prio);
+}
+release(&ptable.lock);
+return 22;
+}
+
+int 
+change_prio(int pid, int priority)
+{
+	struct proc *p = myproc();
+	acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+	  if(p->pid == pid){
+			p->prio = priority;
+			break;
+		}
+	}
+	release(&ptable.lock);
+	return 0;
 }

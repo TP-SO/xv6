@@ -9,6 +9,8 @@
     ret
 
 SYSCALL(fork)
+SYSCALL(change_prio)
+SYSCALL(cps)
 SYSCALL(exit)
 SYSCALL(wait)
 SYSCALL(pipe)

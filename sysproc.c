@@ -10,8 +10,7 @@
 int
 sys_fork(void)
 {
-  return fork();
-}
+  return fork(); }
 
 int
 sys_exit(void)
@@ -88,4 +87,24 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+int
+sys_change_prio(void)
+{
+  int pr, pid;
+  if(argint(0, &pid) < 0)
+    return -1;
+
+  if(argint(1, &pr) < 0)
+    return -1;
+
+
+  return change_prio(pid, pr);
+}
+
+int
+sys_cps(void)
+{
+  return cps();
 }
