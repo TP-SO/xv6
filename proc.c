@@ -351,13 +351,6 @@ scheduler(void)
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
-      // Marca quando entrou em RUNNING
-      p->last_rutime = ticks;
-      if (p->last_retime > p->last_stime)
-        // Atualiza tempo em RUNNABLE
-        p->retime += ticks - p->last_retime;
-      else
-        p->stime += ticks - p->last_stime;
 
       p->quanta = INTERV;
 
@@ -405,20 +398,22 @@ yield(void)
 {
     acquire(&ptable.lock); 
     struct proc *p = myproc();
-    cprintf("\nTICKS: %d \n", ticks);
+    struct proc *p1;
 
     --p->quanta;
 
+    for(p1 = ptable.proc; p1 < &ptable.proc[NPROC]; p1++) {
+      if(p1->state == RUNNING)
+        p1->rutime++;
+      if(p1->state == RUNNABLE)
+        p1->retime++;
+      if(p1->state == SLEEPING)
+        p1->stime++;
+    }
+    
+
     if(!p->quanta ) {
         p->state = RUNNABLE;
-        // Marca quando entrou em RUNNABLE
-        p->last_retime = ticks;
-        if (p->last_rutime > p->last_stime)
-          // Atualiza tempo em RUNNING
-          p->rutime += ticks - p->last_rutime;
-        else
-          // Atualiza tempo em SLEEPING
-          p->stime += ticks - p->last_stime;
         sched();
     }
     release(&ptable.lock);
@@ -457,9 +452,9 @@ sleep(void *chan, struct spinlock *lk)
 
   if(lk == 0)
     panic("sleep without lk");
-
-  // Must acquire ptable.lock in order to
-  // change p->state and then call sched.
+  // Once we hold ptable.lock, we can be
+  // guaranteed that we won't miss any wakeup
+  // (wakeup runs with ptable.lock locked),
   // Once we hold ptable.lock, we can be
   // guaranteed that we won't miss any wakeup
   // (wakeup runs with ptable.lock locked),
@@ -471,10 +466,6 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
-  // Marca quando entrou em SLEEPING
-  p->last_stime = ticks;
-  // Atualiza tempo em RUNNING
-  p->rutime = ticks - p->last_rutime;
 
   sched();
 
@@ -497,8 +488,9 @@ wakeup1(void *chan)
   struct proc *p;
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
+    if(p->state == SLEEPING && p->chan == chan) {
       p->state = RUNNABLE;
+    }
 }
 
 // Wake up all processes sleeping on chan.
@@ -582,9 +574,11 @@ acquire(&ptable.lock);
 cprintf("name \t pid \t state \t priority \n");
 for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
   if(p->state == SLEEPING)
-	  cprintf("%s \t %d \t SLEEPING \t %d \n ", p->name,p->pid,p->prio);
+	  cprintf("%s \t %d \t SLEEPING \t %d CREATED %d RUNNING %d RUNNABLE %d SLEEPING %d\n ",
+           p->name,p->pid,p->prio, p->ctime, p->rutime, p->retime, p->stime);
 	else if(p->state == RUNNING)
- 	  cprintf("%s \t %d \t RUNNING \t %d \n ", p->name,p->pid,p->prio);
+	  cprintf("%s \t %d \t RUNNING \t %d CREATED %d RUNNING %d RUNNABLE %d SLEEPING %d\n ",
+           p->name,p->pid,p->prio, p->ctime, p->rutime, p->retime, p->stime);
 	else if(p->state == RUNNABLE)
  	  cprintf("%s \t %d \t RUNNABLE \t %d \n ", p->name,p->pid,p->prio);
 }

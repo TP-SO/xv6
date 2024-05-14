@@ -53,11 +53,8 @@ struct proc {
   char name[16];               // Process name (debugging)
   uint ctime; // Tempo quando o processo foi criado
   int stime; //Tempo SLEEPING
-  int last_stime; // Tempo em que entrou em SLEEPING por último
   int retime; //Tempo READY(RUNNABLE) time
-  int last_retime; //Tempo em que entrou em RUNNABLE por último
   int rutime; // Tempo executando (RUNNING)
-  int last_rutime; // Tempo em que entrou em RUNNING por último
 };
 
 // Process memory is laid out contiguously, low addresses first:
