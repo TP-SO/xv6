@@ -28,6 +28,7 @@ main(void)
   uartinit();      // serial port
   pinit();         // process table
   tvinit();        // trap vectors
+  initqueues();    // init proc queues
   binit();         // buffer cache
   fileinit();      // file table
   ideinit();       // disk 

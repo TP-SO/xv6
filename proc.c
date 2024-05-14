@@ -7,18 +7,33 @@
 #include "proc.h"
 #include "spinlock.h"
 
+struct queue {
+  struct proc *procs[NPROC];
+  int head, tail;
+};
+
+void insert_into_queue(struct queue *q, struct proc *p) {
+  q->procs[q->tail] = p;
+  q->tail = (q->tail + 1) % NPROC;
+}
+
+void remove_from_queue(struct queue *q, int pos) {
+  for (int i = pos; i != q->tail; i = (i + 1) % NPROC) {
+    q->procs[i] = q->procs[(i + 1) % NPROC];
+  }
+  q->tail = (q->tail - 1 + NPROC) % NPROC;
+}
+
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
+  struct queue queues[NQUEUES];
 } ptable;
 
 static struct proc *initproc;
 
 int nextpid = 1;
-uint exists1 = 0;
-uint exists2 = 0;
-uint exists3 = 0;
-uint exists4 = 0;
+
 extern void forkret(void);
 extern void trapret(void);
 
@@ -28,6 +43,14 @@ void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
+}
+
+void 
+initqueues(void) {
+  for (int i = 0; i < NQUEUES; i++) {
+    ptable.queues[i].head = 0;
+    ptable.queues[i].tail = 0;
+  }
 }
 
 // Must be called with interrupts disabled
@@ -95,7 +118,9 @@ found:
   p->state = EMBRYO;
   p->pid = nextpid++;
   p->ctime = ticks;
-  exists2++;
+  p->burst_time = 0;
+
+  insert_into_queue(&ptable.queues[1], p);
 
   release(&ptable.lock);
 
@@ -341,26 +366,89 @@ scheduler(void)
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
-        continue;
+    for (int i = 0; i < NQUEUES; i++) {  // FCFS
+      struct queue *q = &ptable.queues[i];
+      if (i == 0) {
+        for (int j = q->head; j != q->tail; j = (j + 1) % NPROC) {
+          p = q->procs[j];
 
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
+          if (p && p->state == RUNNABLE) {
+            c->proc = p;
+            switchuvm(p);
+            p->state = RUNNING;
 
-      p->quanta = INTERV;
+            swtch(&(c->scheduler), p->context);
+            switchkvm();
 
-      swtch(&(c->scheduler), p->context);
-      switchkvm();
+            c->proc = 0;
+          }
+        }
+      } else if (i == 1) {  // SJF
+        struct proc *shortest = 0;
 
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
-      c->proc = 0;
+        for (int j = q->head; j != q->tail; j = (j + 1) % NPROC) {
+          p = q->procs[j];
+
+            if (p && p->state == RUNNABLE) {
+              if (!shortest || p->burst_time < shortest->burst_time) {
+                shortest = p;
+            }
+          }
+        }
+
+        if (shortest) {
+          p = shortest;
+          c->proc = p;
+          switchuvm(p);
+          p->state = RUNNING;
+
+          swtch(&(c->scheduler), p->context);
+          switchkvm();
+
+          c->proc = 0;
+        }
+      } else if (i == 2) {  // RR
+          for (int j = q->head; j != q->tail; j = (j + 1) % NPROC) {
+            p = q->procs[j];
+
+            if (p && p->state == RUNNABLE) {
+              // Switch to chosen process.  It is the process's job
+              // to release ptable.lock and then reacquire it
+              // before jumping back to us.
+              c->proc = p;
+              switchuvm(p);
+              p->state = RUNNING;
+              p->quanta = INTERV;
+
+              swtch(&(c->scheduler), p->context);
+              switchkvm();
+
+              // Process is done running for now.
+              // It should have changed its p->state before coming back.
+              c->proc = 0;
+
+              remove_from_queue(q, j);
+              insert_into_queue(q, p);
+            }
+          }
+      } else {  // LCFS
+        for (int j = q->tail; j != q->head; j = (j - 1) % NPROC) {
+          p = q->procs[j];
+
+          if (p && p->state == RUNNABLE) {
+            c->proc = p;
+            switchuvm(p);
+            p->state = RUNNING;
+
+            swtch(&(c->scheduler), p->context);
+            switchkvm();
+
+            c->proc = 0;
+          }
+        }
+      }
     }
+
     release(&ptable.lock);
 
   }
