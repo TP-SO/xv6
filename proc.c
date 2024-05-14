@@ -94,7 +94,7 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
-  p->prio = 2;
+  p->ctime = ticks;
   exists2++;
 
   release(&ptable.lock);
@@ -223,6 +223,7 @@ fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
+  np->prio = 2;
 
   release(&ptable.lock);
 
@@ -350,6 +351,14 @@ scheduler(void)
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
+      // Marca quando entrou em RUNNING
+      p->last_rutime = ticks;
+      if (p->last_retime > p->last_stime)
+        // Atualiza tempo em RUNNABLE
+        p->retime += ticks - p->last_retime;
+      else
+        p->stime += ticks - p->last_stime;
+
       p->quanta = INTERV;
 
       swtch(&(c->scheduler), p->context);
@@ -396,13 +405,20 @@ yield(void)
 {
     acquire(&ptable.lock); 
     struct proc *p = myproc();
+    cprintf("\nTICKS: %d \n", ticks);
 
     --p->quanta;
 
-    /* cprintf("\n----Quantum %d: %s----\n", p->quanta, p->name); */
-
     if(!p->quanta ) {
         p->state = RUNNABLE;
+        // Marca quando entrou em RUNNABLE
+        p->last_retime = ticks;
+        if (p->last_rutime > p->last_stime)
+          // Atualiza tempo em RUNNING
+          p->rutime += ticks - p->last_rutime;
+        else
+          // Atualiza tempo em SLEEPING
+          p->stime += ticks - p->last_stime;
         sched();
     }
     release(&ptable.lock);
@@ -455,6 +471,10 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
+  // Marca quando entrou em SLEEPING
+  p->last_stime = ticks;
+  // Atualiza tempo em RUNNING
+  p->rutime = ticks - p->last_rutime;
 
   sched();
 
