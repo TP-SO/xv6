@@ -121,6 +121,7 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
+void            aging(void);
 int             change_prio(int pid, int priority);
 int		          cps(void);
 

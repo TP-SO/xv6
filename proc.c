@@ -366,9 +366,9 @@ scheduler(void)
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
-    for (int i = 0; i < NQUEUES; i++) {  // FCFS
+    for (int i = NQUEUES - 1; i >= 0; i--) {  // FCFS
       struct queue *q = &ptable.queues[i];
-      if (i == 0) {
+      if (i == 3) {
         for (int j = q->head; j != q->tail; j = (j + 1) % NPROC) {
           p = q->procs[j];
 
@@ -383,7 +383,7 @@ scheduler(void)
             c->proc = 0;
           }
         }
-      } else if (i == 1) {  // SJF
+      } else if (i == 2) {  // SJF
         struct proc *shortest = 0;
 
         for (int j = q->head; j != q->tail; j = (j + 1) % NPROC) {
@@ -407,7 +407,7 @@ scheduler(void)
 
           c->proc = 0;
         }
-      } else if (i == 2) {  // RR
+      } else if (i == 1) {  // RR
           for (int j = q->head; j != q->tail; j = (j + 1) % NPROC) {
             p = q->procs[j];
 
@@ -499,6 +499,9 @@ yield(void)
         p1->stime++;
     }
     
+  	release(&ptable.lock);
+    aging();
+	  acquire(&ptable.lock);
 
     if(!p->quanta ) {
         p->state = RUNNABLE;
@@ -554,6 +557,7 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
+  p->last_active = ticks;
 
   sched();
 
@@ -687,4 +691,76 @@ change_prio(int pid, int priority)
 	}
 	release(&ptable.lock);
 	return 0;
+}
+
+void
+aging()
+{
+	acquire(&ptable.lock);
+  struct proc *p = myproc();
+  
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    struct queue *q = &ptable.queues[p->prio - 1];
+    int pos = -1;
+	  for (int j = q->head; j != q->tail; j = (j + 1) % NPROC) {
+      if(q->procs[j] == p) {
+        pos = j;
+        break;
+      } 
+    }
+
+    if(pos == -1) continue;
+
+    int curr_sleep_time = ticks - p->last_active, succ_change_prio;
+    
+    switch (p->prio)
+    {
+    case 1:
+      if(curr_sleep_time > CP12) {
+	      release(&ptable.lock);
+        succ_change_prio = change_prio(p->pid, 2);
+        acquire(&ptable.lock);
+
+        // cprintf("pid: %d sleep: %d ticks: %d prio: 1\n", p->pid, curr_sleep_time, ticks);
+
+        if(succ_change_prio == 0) {
+          remove_from_queue(q, pos);
+          insert_into_queue(&ptable.queues[1], p);
+        }
+        
+      }
+      break;
+    case 2:
+      if(curr_sleep_time > CP23) {
+        release(&ptable.lock);
+        succ_change_prio = change_prio(p->pid, 3);
+        acquire(&ptable.lock);
+        
+        // cprintf("pid: %d sleep: %d ticks: %d prio: 2\n", p->pid, curr_sleep_time, ticks);
+
+        if(succ_change_prio == 0) {
+          remove_from_queue(q, pos);
+          insert_into_queue(&ptable.queues[2], p);
+        }
+      }
+      break;
+    case 3:
+      if(curr_sleep_time > CP34) {
+        release(&ptable.lock);
+        succ_change_prio = change_prio(p->pid, 3);
+        acquire(&ptable.lock);
+        
+        // cprintf("pid: %d sleep: %d ticks: %d prio: 3\n", p->pid, curr_sleep_time, ticks);
+        
+        if(succ_change_prio == 0) {
+          remove_from_queue(q, pos);
+          insert_into_queue(&ptable.queues[3], p);
+        }
+        
+      }
+      break;
+    }
+	}
+  
+	release(&ptable.lock);
 }
