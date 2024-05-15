@@ -8,6 +8,13 @@ int main(int argc, char *argv[]) {
   int k, n;
   int mod;
 
+  int sum_retime = 0;
+  int sum_rutime = 0;
+  int sum_stime = 0;
+
+  /* double mean_retime; */
+  /* , mean_rutime, mean_stime; */
+
   if(argc < 2)
 	n = 3; //Default
   else
@@ -19,13 +26,8 @@ int main(int argc, char *argv[]) {
     pid = fork ();
     if ( pid < 0 ) {
       printf(1, "%d failed in fork!\n", getpid());
-    } else if (pid > 0) {
-      // parent
-      int retime, rutime, stime;
-      while(wait2(&retime, &rutime, &stime) >= 0) 
-      printf(1, "pid: %d RUNNABLE: %d \t RUNNING: %d \t SLEEPING: %d\n",pid ,retime, rutime, stime);
     }
-    else {
+    else if (pid == 0) {
       mod = getpid() % 3;
       if (mod == 0) {
         for (int i = 0; i < 100; i++) {
@@ -34,7 +36,7 @@ int main(int argc, char *argv[]) {
       } else if (mod == 1) {
         for (int i = 0; i < 20; i++) {
           for (int j = 0; j < 1000000; j++) {}
-          // yield();
+          yield();
         }
       } else {
         for (int i = 0; i < 100; i++) {
@@ -42,8 +44,25 @@ int main(int argc, char *argv[]) {
         }
       }
 
-      break;
+      exit();
     }
   }
+
+
+  // parent
+  int retime, rutime, stime;
+  while(wait2(&retime, &rutime, &stime) >= 0) {
+    sum_retime += retime;
+    sum_rutime += rutime;
+    sum_stime += stime;
+    printf(1, "RUNNABLE: %d \t RUNNING: %d \t SLEEPING: %d\n",retime, rutime, stime);
+  }
+
+  /* mean_retime = (double)sum_retime / n; */
+
+  printf(1, "\nMÈDIA RUNNABLE: %f MÉDIA RUNNING %f MÉDIA SLEEPING %f\n", 
+         (double)sum_retime / n, (double)sum_rutime / n, (double)sum_stime / n);
+
+
   exit();
 }

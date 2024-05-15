@@ -362,6 +362,10 @@ wait2(int* retime, int* rutime, int* stime)
       havekids = 1;
       if(p->state == ZOMBIE){
         // Found one.
+        /* cprintf("%d, %d, %d", p->retime, p->rutime, p->stime); */
+        *retime = p->retime;
+        *rutime = p->rutime;
+        *stime = p->stime;
         kfree(p->kstack);
         p->kstack = 0;
         freevm(p->pgdir);
@@ -370,9 +374,6 @@ wait2(int* retime, int* rutime, int* stime)
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
-        *retime = p->retime;
-        *rutime = p->rutime;
-        *stime = p->stime;
         release(&ptable.lock);
         return 0;
       }
