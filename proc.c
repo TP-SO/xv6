@@ -531,9 +531,7 @@ yield(void)
     acquire(&ptable.lock); 
     struct proc *p = myproc();
 
-
     --p->quanta;
-
     
   	release(&ptable.lock);
     aging();

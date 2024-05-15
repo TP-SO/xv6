@@ -23,10 +23,10 @@ int main(int argc, char *argv[]) {
       // parent
       int retime, rutime, stime;
       while(wait2(&retime, &rutime, &stime) >= 0) 
-      printf(1, "%d RUNNABLE: %d \t RUNNING: %d \t SLEEPING: %d\n",pid ,retime, rutime, stime);
+      printf(1, "pid: %d RUNNABLE: %d \t RUNNING: %d \t SLEEPING: %d\n",pid ,retime, rutime, stime);
     }
-    else{
-      mod = pid % 3;
+    else {
+      mod = getpid() % 3;
       if (mod == 0) {
         for (int i = 0; i < 100; i++) {
           for (int j = 0; j < 1000000; j++) {}
@@ -34,6 +34,7 @@ int main(int argc, char *argv[]) {
       } else if (mod == 1) {
         for (int i = 0; i < 20; i++) {
           for (int j = 0; j < 1000000; j++) {}
+          // yield();
         }
       } else {
         for (int i = 0; i < 100; i++) {
