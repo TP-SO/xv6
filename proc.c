@@ -182,6 +182,7 @@ userinit(void)
   acquire(&ptable.lock);
 
   p->state = RUNNABLE;
+  p->runnable_since = ticks;
 
   release(&ptable.lock);
 }
@@ -249,6 +250,7 @@ fork(void)
 
   np->state = RUNNABLE;
   np->prio = 2;
+  np->runnable_since = ticks;
 
   release(&ptable.lock);
 
@@ -540,6 +542,7 @@ yield(void)
 
     if(!p->quanta ) {
         p->state = RUNNABLE;
+        p->runnable_since = ticks;
         sched();
     }
     release(&ptable.lock);
@@ -592,7 +595,6 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
-  p->last_active = ticks;
 
   sched();
 
@@ -629,6 +631,7 @@ wakeup1(void *chan)
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if(p->state == SLEEPING && p->chan == chan) {
       p->state = RUNNABLE;
+      p->runnable_since = ticks;
     }
 }
 
@@ -654,8 +657,10 @@ kill(int pid)
     if(p->pid == pid){
       p->killed = 1;
       // Wake process from sleep if necessary.
-      if(p->state == SLEEPING)
+      if(p->state == SLEEPING) {
         p->state = RUNNABLE;
+        p->runnable_since = ticks;
+      }
       release(&ptable.lock);
       return 0;
     }
@@ -766,17 +771,17 @@ aging()
 
     if(pos == -1) continue;
 
-    int curr_sleep_time = ticks - p->last_active, succ_change_prio;
+    int curr_runnable_time = ticks - p->runnable_since, succ_change_prio;
     
     switch (p->prio)
     {
     case 1:
-      if(curr_sleep_time > CP12) {
+      if(curr_runnable_time > CP12) {
 	      release(&ptable.lock);
         succ_change_prio = change_prio(p->pid, 2);
         acquire(&ptable.lock);
 
-        // cprintf("pid: %d sleep: %d ticks: %d prio: 1\n", p->pid, curr_sleep_time, ticks);
+        // cprintf("pid: %d sleep: %d ticks: %d prio: 1\n", p->pid, curr_runnable_time, ticks);
 
         if(succ_change_prio == 0) {
           remove_from_queue(q, pos);
@@ -786,12 +791,12 @@ aging()
       }
       break;
     case 2:
-      if(curr_sleep_time > CP23) {
+      if(curr_runnable_time > CP23) {
         release(&ptable.lock);
         succ_change_prio = change_prio(p->pid, 3);
         acquire(&ptable.lock);
         
-        // cprintf("pid: %d sleep: %d ticks: %d prio: 2\n", p->pid, curr_sleep_time, ticks);
+        // cprintf("pid: %d sleep: %d ticks: %d prio: 2\n", p->pid, curr_runnable_time, ticks);
 
         if(succ_change_prio == 0) {
           remove_from_queue(q, pos);
@@ -800,12 +805,12 @@ aging()
       }
       break;
     case 3:
-      if(curr_sleep_time > CP34) {
+      if(curr_runnable_time > CP34) {
         release(&ptable.lock);
         succ_change_prio = change_prio(p->pid, 3);
         acquire(&ptable.lock);
         
-        // cprintf("pid: %d sleep: %d ticks: %d prio: 3\n", p->pid, curr_sleep_time, ticks);
+        // cprintf("pid: %d sleep: %d ticks: %d prio: 3\n", p->pid, curr_runnable_time, ticks);
         
         if(succ_change_prio == 0) {
           remove_from_queue(q, pos);

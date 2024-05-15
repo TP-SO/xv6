@@ -52,11 +52,11 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
-  uint ctime; // Tempo quando o processo foi criado
-  int stime; //Tempo SLEEPING
-  int retime; //Tempo READY(RUNNABLE) time
-  int rutime; // Tempo executando (RUNNING)
-  uint last_active; // ultimo tick que o processo esteve ativo
+  uint ctime;                  // Tempo quando o processo foi criado
+  int stime;                   // Tempo SLEEPING
+  int retime;                  // Tempo READY(RUNNABLE) time
+  int rutime;                  // Tempo executando (RUNNING)
+  uint runnable_since;         // Momento em que o processo se tornou runnable
 };
 
 // Process memory is laid out contiguously, low addresses first:
