@@ -320,6 +320,50 @@ wait(void)
   }
 }
 
+int 
+wait2(int* retime, int* rutime, int* stime) 
+{
+  struct proc *p;
+  int havekids;
+  struct proc *curproc = myproc();
+  
+  acquire(&ptable.lock);
+  for(;;){
+    // Scan through table looking for exited children.
+    havekids = 0;
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->parent != curproc)
+        continue;
+      havekids = 1;
+      if(p->state == ZOMBIE){
+        // Found one.
+        kfree(p->kstack);
+        p->kstack = 0;
+        freevm(p->pgdir);
+        p->pid = 0;
+        p->parent = 0;
+        p->name[0] = 0;
+        p->killed = 0;
+        p->state = UNUSED;
+        *retime = p->retime;
+        *rutime = p->rutime;
+        *stime = p->stime;
+        release(&ptable.lock);
+        return 0;
+      }
+    }
+
+    // No point waiting if we don't have any children.
+    if(!havekids || curproc->killed){
+      release(&ptable.lock);
+      return -1;
+    }
+
+    // Wait for children to exit.  (See wakeup1 call in proc_exit.)
+    sleep(curproc, &ptable.lock);  //DOC: wait-sleep
+  }
+}
+
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
@@ -398,18 +442,10 @@ yield(void)
 {
     acquire(&ptable.lock); 
     struct proc *p = myproc();
-    struct proc *p1;
+
 
     --p->quanta;
 
-    for(p1 = ptable.proc; p1 < &ptable.proc[NPROC]; p1++) {
-      if(p1->state == RUNNING)
-        p1->rutime++;
-      if(p1->state == RUNNABLE)
-        p1->retime++;
-      if(p1->state == SLEEPING)
-        p1->stime++;
-    }
     
 
     if(!p->quanta ) {
@@ -486,6 +522,18 @@ static void
 wakeup1(void *chan)
 {
   struct proc *p;
+
+  // Atualiza tempo dos processos
+  struct proc *p1;
+
+  for(p1 = ptable.proc; p1 < &ptable.proc[NPROC]; p1++) {
+    if(p1->state == RUNNING)
+      p1->rutime++;
+    if(p1->state == RUNNABLE)
+      p1->retime++;
+    if(p1->state == SLEEPING)
+      p1->stime++;
+  }
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if(p->state == SLEEPING && p->chan == chan) {
@@ -569,10 +617,17 @@ struct proc *p;
 //Enables interrupts on this processor.
 sti();
 
+/* int retime, rutime, stime; */
+
+/* wait2(&retime, &rutime, &stime, 0); */
+
+/* cprintf("WAIT2 %d %d %d", retime, rutime, stime); */
+
 //Loop over process table looking for process with pid.
 acquire(&ptable.lock);
 cprintf("name \t pid \t state \t priority \n");
 for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+  /* wait2(&retime, &rutime, &stime, p->pid); */
   if(p->state == SLEEPING)
 	  cprintf("%s \t %d \t SLEEPING \t %d CREATED %d RUNNING %d RUNNABLE %d SLEEPING %d\n ",
            p->name,p->pid,p->prio, p->ctime, p->rutime, p->retime, p->stime);
@@ -580,7 +635,8 @@ for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
 	  cprintf("%s \t %d \t RUNNING \t %d CREATED %d RUNNING %d RUNNABLE %d SLEEPING %d\n ",
            p->name,p->pid,p->prio, p->ctime, p->rutime, p->retime, p->stime);
 	else if(p->state == RUNNABLE)
- 	  cprintf("%s \t %d \t RUNNABLE \t %d \n ", p->name,p->pid,p->prio);
+	  cprintf("%s \t %d \t RUNNABLE \t %d CREATED %d RUNNING %d RUNNABLE %d SLEEPING %d\n ",
+           p->name,p->pid,p->prio, p->ctime, p->rutime, p->retime, p->stime);
 }
 release(&ptable.lock);
 return 22;
@@ -600,3 +656,4 @@ change_prio(int pid, int priority)
 	release(&ptable.lock);
 	return 0;
 }
+

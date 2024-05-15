@@ -183,7 +183,7 @@ UPROGS=\
 	_zombie\
 	_change_prio\
 	_ps\
-	_dproc\
+	_sanity\
 
 fs.img: mkfs README $(UPROGS)
 	./mkfs fs.img README $(UPROGS)
