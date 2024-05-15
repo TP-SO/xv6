@@ -36,6 +36,7 @@ enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 // Per-process state
 struct proc {
+  uint burst_time;
   uint prio;
   uint quanta;
   uint sz;                     // Size of process memory (bytes)
@@ -55,6 +56,7 @@ struct proc {
   int stime; //Tempo SLEEPING
   int retime; //Tempo READY(RUNNABLE) time
   int rutime; // Tempo executando (RUNNING)
+  uint last_active; // ultimo tick que o processo esteve ativo
 };
 
 // Process memory is laid out contiguously, low addresses first:

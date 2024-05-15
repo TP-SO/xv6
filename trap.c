@@ -54,6 +54,10 @@ trap(struct trapframe *tf)
       wakeup(&ticks);
       release(&tickslock);
     }
+
+    if (myproc() != 0 && tf->cs == DPL_USER) {
+      myproc()->burst_time++;
+    }
     lapiceoi();
     break;
   case T_IRQ0 + IRQ_IDE:
