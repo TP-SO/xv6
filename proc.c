@@ -351,7 +351,7 @@ int
 wait2(int* retime, int* rutime, int* stime) 
 {
   struct proc *p;
-  int havekids;
+  int havekids, pid;
   struct proc *curproc = myproc();
   
   acquire(&ptable.lock);
@@ -364,7 +364,7 @@ wait2(int* retime, int* rutime, int* stime)
       havekids = 1;
       if(p->state == ZOMBIE){
         // Found one.
-        /* cprintf("%d, %d, %d", p->retime, p->rutime, p->stime); */
+        pid = p->pid;
         *retime = p->retime;
         *rutime = p->rutime;
         *stime = p->stime;
@@ -377,7 +377,7 @@ wait2(int* retime, int* rutime, int* stime)
         p->killed = 0;
         p->state = UNUSED;
         release(&ptable.lock);
-        return 0;
+        return pid;
       }
     }
 

@@ -8,18 +8,13 @@ int main(int argc, char *argv[]) {
   int k, n;
   int mod;
 
-  int sum_retime = 0;
-  int sum_rutime = 0;
-  int sum_stime = 0;
-
-  /* double mean_retime; */
-  /* , mean_rutime, mean_stime; */
 
   if(argc < 2)
-	n = 3; //Default
+    n = 3; //Default
   else
-	n = atoi(argv[1]);
-  n = n * 3;
+    n = atoi(argv[1]);
+  n *= 3;
+
   pid = 0;
 
   for ( k = 0; k < n; k++ ) {
@@ -46,23 +41,67 @@ int main(int argc, char *argv[]) {
 
       exit();
     }
-  }
+    else {
 
+    }
+  }
 
   // parent
-  int retime, rutime, stime;
-  while(wait2(&retime, &rutime, &stime) >= 0) {
-    sum_retime += retime;
-    sum_rutime += rutime;
-    sum_stime += stime;
-    printf(1, "RUNNABLE: %d \t RUNNING: %d \t SLEEPING: %d\n",retime, rutime, stime);
+
+  int sum_CPU_retime = 0;
+  int sum_CPU_rutime = 0;
+  int sum_CPU_stime = 0;
+
+  int sum_S_retime = 0;
+  int sum_S_rutime = 0;
+  int sum_S_stime = 0;
+
+  int sum_IO_retime = 0;
+  int sum_IO_rutime = 0;
+  int sum_IO_stime = 0;
+
+  int retime, rutime, stime, last_pid;
+
+  for (int i = 0; i < n; i++) {
+    last_pid = wait2(&retime, &rutime, &stime);
+
+    switch(last_pid % 3){
+      case 0:
+        sum_CPU_retime += retime;
+        sum_CPU_rutime += rutime;
+        sum_CPU_stime += stime;
+        printf(1, "TIPO: CPU-Bound ");
+        break;
+
+      case 1:
+        sum_S_retime += retime;
+        sum_S_rutime += rutime;
+        sum_S_stime += stime;
+        printf(1, "TIPO: S-CPU ");
+        break;
+
+      case 2:
+        sum_IO_retime += retime;
+        sum_IO_rutime += rutime;
+        sum_IO_stime += stime;
+        printf(1, "TIPO: IO-Bound ");
+        break;
+    }
+
+    printf(1, "PID %d RUNNABLE: %d \t RUNNING: %d \t SLEEPING: %d\n",last_pid, retime, rutime, stime);
   }
 
-  /* mean_retime = (double)sum_retime / n; */
+  printf(1, "PROCESSOS CPU-Bound");
+  printf(1, "\nMEDIA RUNNABLE: %d MEDIA RUNNING %d MEDIA SLEEPING %d\n",
+         sum_CPU_retime / n, sum_CPU_rutime / n, sum_CPU_stime / n);
 
-  printf(1, "\nMÈDIA RUNNABLE: %f MÉDIA RUNNING %f MÉDIA SLEEPING %f\n", 
-         (double)sum_retime / n, (double)sum_rutime / n, (double)sum_stime / n);
+  printf(1, "PROCESSOS S-CPU");
+  printf(1, "\nMEDIA RUNNABLE: %d MEDIA RUNNING %d MEDIA SLEEPING %d\n",
+         sum_S_retime / n, sum_S_rutime / n, sum_S_stime / n);
 
+  printf(1, "PROCESSOS IO-Bound");
+  printf(1, "\nMEDIA RUNNABLE: %d MEDIA RUNNING %d MEDIA SLEEPING %d\n",
+         sum_IO_retime / n, sum_IO_rutime / n, sum_IO_stime / n);
 
   exit();
 }
