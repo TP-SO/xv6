@@ -13,11 +13,10 @@ int main(int argc, char *argv[]) {
     n = 3; //Default
   else
     n = atoi(argv[1]);
-  n *= 3;
 
   pid = 0;
 
-  for ( k = 0; k < n; k++ ) {
+  for ( k = 0; k < n * 3; k++ ) {
     pid = fork ();
     if ( pid < 0 ) {
       printf(1, "%d failed in fork!\n", getpid());
@@ -62,7 +61,7 @@ int main(int argc, char *argv[]) {
 
   int retime, rutime, stime, last_pid;
 
-  for (int i = 0; i < n; i++) {
+  for (int i = 0; i < n * 3; i++) {
     last_pid = wait2(&retime, &rutime, &stime);
 
     switch(last_pid % 3){
