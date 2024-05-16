@@ -7,27 +7,9 @@
 #include "proc.h"
 #include "spinlock.h"
 
-struct queue {
-  struct proc *procs[NPROC];
-  int head, tail;
-};
-
-void insert_into_queue(struct queue *q, struct proc *p) {
-  q->procs[q->tail] = p;
-  q->tail = (q->tail + 1) % NPROC;
-}
-
-void remove_from_queue(struct queue *q, int pos) {
-  for (int i = pos; i != q->tail; i = (i + 1) % NPROC) {
-    q->procs[i] = q->procs[(i + 1) % NPROC];
-  }
-  q->tail = (q->tail - 1 + NPROC) % NPROC;
-}
-
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
-  struct queue queues[NQUEUES];
 } ptable;
 
 static struct proc *initproc;
@@ -43,14 +25,6 @@ void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
-}
-
-void 
-initqueues(void) {
-  for (int i = 0; i < NQUEUES; i++) {
-    ptable.queues[i].head = 0;
-    ptable.queues[i].tail = 0;
-  }
 }
 
 // Must be called with interrupts disabled
@@ -120,8 +94,6 @@ found:
   p->ctime = ticks;
   p->burst_time = 0;
 
-  insert_into_queue(&ptable.queues[1], p);
-
   release(&ptable.lock);
 
   // Allocate kernel stack.
@@ -182,6 +154,7 @@ userinit(void)
   acquire(&ptable.lock);
 
   p->state = RUNNABLE;
+  p->prio = 4;
   p->runnable_since = ticks;
 
   release(&ptable.lock);
@@ -392,6 +365,81 @@ wait2(int* retime, int* rutime, int* stime)
   }
 }
 
+struct proc* fcfs() {
+  struct proc* select = 0;
+  struct proc* p;
+
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    if(p->state == RUNNABLE && p->prio == 4) {
+      if(select == 0 || p->ctime < select->ctime) {
+        select = p;
+      }
+    }
+  } 
+
+  return select; 
+}
+
+struct proc* srf() {
+  struct proc* select = 0;
+  struct proc* p;
+
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    if(p->state == RUNNABLE && p->prio == 3) {
+      if(select == 0 || select->burst_time > p->burst_time) {
+        select = p;
+      }
+    }
+  } 
+
+  return select; 
+}
+
+struct proc* rr() {
+  struct proc* select = 0;
+  struct proc* p;
+
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    if(p->state == RUNNABLE && p->prio == 2) {
+      if(select == 0 || select->runnable_since > p->runnable_since) {
+        select = p;
+      }
+    }
+  } 
+
+  return select; 
+}
+
+struct proc* lcfs() {
+  struct proc* select = 0;
+  struct proc* p;
+
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    if(p->state == RUNNABLE && p->prio == 1) {
+      if(select == 0 || p->ctime > select->ctime) {
+        select = p;
+      }
+    }
+  } 
+
+  return select; 
+}
+
+struct proc* nextproc() {
+  struct proc* select = 0;
+
+  select = fcfs();
+  if(select != 0) return select;
+
+  select = srf();
+  if(select != 0) return select;
+
+  select = rr();
+  if(select != 0) return select;
+
+  return lcfs();
+}
+
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
@@ -411,93 +459,31 @@ scheduler(void)
     // Enable interrupts on this processor.
     sti();
 
+    aging();
+
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
-    for (int i = NQUEUES - 1; i >= 0; i--) {  // FCFS
-      struct queue *q = &ptable.queues[i];
-      if (i == 3) {
-        for (int j = q->head; j != q->tail; j = (j + 1) % NPROC) {
-          p = q->procs[j];
 
-          if (p && p->state == RUNNABLE) {
-            c->proc = p;
-            switchuvm(p);
-            p->state = RUNNING;
+    p = nextproc();
 
-            swtch(&(c->scheduler), p->context);
-            switchkvm();
-
-            c->proc = 0;
-          }
-        }
-      } else if (i == 2) {  // SJF
-        struct proc *shortest = 0;
-
-        for (int j = q->head; j != q->tail; j = (j + 1) % NPROC) {
-          p = q->procs[j];
-
-            if (p && p->state == RUNNABLE) {
-              if (!shortest || p->burst_time < shortest->burst_time) {
-                shortest = p;
-            }
-          }
-        }
-
-        if (shortest) {
-          p = shortest;
-          c->proc = p;
-          switchuvm(p);
-          p->state = RUNNING;
-
-          swtch(&(c->scheduler), p->context);
-          switchkvm();
-
-          c->proc = 0;
-        }
-      } else if (i == 1) {  // RR
-          for (int j = q->head; j != q->tail; j = (j + 1) % NPROC) {
-            p = q->procs[j];
-
-            if (p && p->state == RUNNABLE) {
-              // Switch to chosen process.  It is the process's job
-              // to release ptable.lock and then reacquire it
-              // before jumping back to us.
-              c->proc = p;
-              switchuvm(p);
-              p->state = RUNNING;
-              p->quanta = INTERV;
-
-              swtch(&(c->scheduler), p->context);
-              switchkvm();
-
-              // Process is done running for now.
-              // It should have changed its p->state before coming back.
-              c->proc = 0;
-
-              remove_from_queue(q, j);
-              insert_into_queue(q, p);
-            }
-          }
-      } else {  // LCFS
-        for (int j = q->tail; j != q->head; j = (j - 1) % NPROC) {
-          p = q->procs[j];
-
-          if (p && p->state == RUNNABLE) {
-            c->proc = p;
-            switchuvm(p);
-            p->state = RUNNING;
-
-            swtch(&(c->scheduler), p->context);
-            switchkvm();
-
-            c->proc = 0;
-          }
-        }
-      }
+    if(p == 0) {
+      c->proc = 0;
+      release(&ptable.lock);
+      continue;
     }
 
-    release(&ptable.lock);
+    if(p->state == RUNNABLE || p->state == RUNNING) {
+      c->proc = p;
+      switchuvm(p);
+      p->state = RUNNING;
 
+      swtch(&(c->scheduler), p->context);
+      switchkvm();
+
+      c->proc = 0;
+    }   
+    
+    release(&ptable.lock);
   }
 }
 
@@ -537,13 +523,13 @@ yield(void)
     --p->quanta;
     
   	release(&ptable.lock);
-    aging();
+    // aging();
 	  acquire(&ptable.lock);
 
     if(!p->quanta ) {
-        p->state = RUNNABLE;
-        p->runnable_since = ticks;
-        sched();
+      p->state = RUNNABLE;
+      p->runnable_since = ticks;
+      sched();
     }
     release(&ptable.lock);
 }
@@ -758,68 +744,19 @@ aging()
 {
 	acquire(&ptable.lock);
   struct proc *p = myproc();
+  int should_promote[] = { CP12, CP23, CP34 };
   
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    struct queue *q = &ptable.queues[p->prio - 1];
-    int pos = -1;
-	  for (int j = q->head; j != q->tail; j = (j + 1) % NPROC) {
-      if(q->procs[j] == p) {
-        pos = j;
-        break;
+    int idle = ticks - p->runnable_since;
+
+    if(p->prio < 4) {
+      if(idle > should_promote[p->prio - 1]) {
+        release(&ptable.lock);
+        change_prio(p->pid, p->prio+1);
+        acquire(&ptable.lock);
       } 
     }
 
-    if(pos == -1) continue;
-
-    int curr_runnable_time = ticks - p->runnable_since, succ_change_prio;
-    
-    switch (p->prio)
-    {
-    case 1:
-      if(curr_runnable_time > CP12) {
-	      release(&ptable.lock);
-        succ_change_prio = change_prio(p->pid, 2);
-        acquire(&ptable.lock);
-
-        // cprintf("pid: %d sleep: %d ticks: %d prio: 1\n", p->pid, curr_runnable_time, ticks);
-
-        if(succ_change_prio == 0) {
-          remove_from_queue(q, pos);
-          insert_into_queue(&ptable.queues[1], p);
-        }
-        
-      }
-      break;
-    case 2:
-      if(curr_runnable_time > CP23) {
-        release(&ptable.lock);
-        succ_change_prio = change_prio(p->pid, 3);
-        acquire(&ptable.lock);
-        
-        // cprintf("pid: %d sleep: %d ticks: %d prio: 2\n", p->pid, curr_runnable_time, ticks);
-
-        if(succ_change_prio == 0) {
-          remove_from_queue(q, pos);
-          insert_into_queue(&ptable.queues[2], p);
-        }
-      }
-      break;
-    case 3:
-      if(curr_runnable_time > CP34) {
-        release(&ptable.lock);
-        succ_change_prio = change_prio(p->pid, 3);
-        acquire(&ptable.lock);
-        
-        // cprintf("pid: %d sleep: %d ticks: %d prio: 3\n", p->pid, curr_runnable_time, ticks);
-        
-        if(succ_change_prio == 0) {
-          remove_from_queue(q, pos);
-          insert_into_queue(&ptable.queues[3], p);
-        }
-        
-      }
-      break;
-    }
 	}
   
 	release(&ptable.lock);

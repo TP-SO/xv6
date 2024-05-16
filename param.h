@@ -12,7 +12,6 @@
 #define NBUF         (MAXOPBLOCKS*3)  // size of disk block cache
 #define FSSIZE       1000  // size of file system in blocks
 #define INTERV 5         // preemption tick rate
-#define NQUEUES 4        // number of queues
 
 #define CP12 200
 #define CP23 300
